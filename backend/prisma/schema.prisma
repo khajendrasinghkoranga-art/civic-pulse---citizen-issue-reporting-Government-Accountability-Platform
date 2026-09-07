@@ -1,0 +1,528 @@
+// ============================================================
+// CivicPulse – Integrated Civic Services & E-Voting Platform
+// Prisma Schema (PostgreSQL)
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// ENUMS
+// ============================================================
+
+enum Role {
+  CITIZEN
+  DEPARTMENT_STAFF
+  DEPARTMENT_ADMIN
+  SUPER_ADMIN
+}
+
+enum IssueStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  IN_PROGRESS
+  RESOLVED
+  REJECTED
+}
+
+enum IssuePriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum NotificationType {
+  ISSUE_CREATED
+  STATUS_CHANGED
+  ISSUE_ASSIGNED
+  NEW_COMMENT
+  SLA_WARNING
+  SLA_BREACHED
+  ISSUE_RESOLVED
+  SYSTEM
+}
+
+enum ElectionStatus {
+  UPCOMING
+  ONGOING
+  COMPLETED
+  CANCELLED
+}
+
+enum VerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+// ============================================================
+// A. USER MANAGEMENT
+// ============================================================
+
+model User {
+  id           String  @id @default(uuid())
+  name         String
+  email        String  @unique
+  passwordHash String
+  phone        String?
+  role         Role    @default(CITIZEN)
+  isVerified   Boolean @default(false)
+  isActive     Boolean @default(true)
+
+  // Future-ready: safe identity/blockchain fields (no raw Aadhaar)
+  identityVerified  Boolean @default(false)
+  blockchainAddress String? @unique
+  identityProofHash String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // ── Relations ──
+  issues             Issue[]
+  uploadedEvidence   IssueEvidence[]
+  statusChanges      IssueStatusHistory[]
+  assignedIssues     IssueAssignment[]      @relation("AssignedTo")
+  assignedByMe       IssueAssignment[]      @relation("AssignedBy")
+  comments           Comment[]
+  notifications      Notification[]
+  feedbacks          IssueFeedback[]
+  communityPosts     CommunityPost[]
+  communityComments  CommunityPostComment[]
+  createdElections   Election[]
+  blockchainIdentity BlockchainIdentity?
+
+  @@index([email])
+  @@index([role])
+}
+
+// ============================================================
+// B. ISSUE CATEGORIES (normalized table, not enum)
+// ============================================================
+
+model IssueCategory {
+  id              String        @id @default(uuid())
+  name            String        @unique
+  description     String?
+  icon            String?
+  defaultPriority IssuePriority @default(MEDIUM)
+  defaultSlaHours Int           @default(48)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  // ── Relations ──
+  issues Issue[]
+
+  @@index([name])
+}
+
+// ============================================================
+// C. CIVIC ISSUE REPORTING
+// ============================================================
+
+model Issue {
+  id          String        @id @default(uuid())
+  title       String
+  description String
+  status      IssueStatus   @default(SUBMITTED)
+  priority    IssuePriority @default(MEDIUM)
+
+  // Location
+  latitude  Float?
+  longitude Float?
+  address   String?
+  ward      String?
+  locality  String?
+  city      String?
+  state     String?
+  pincode   String?
+
+  isAnonymous Boolean   @default(false)
+  slaDueAt    DateTime?
+  resolvedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // ── Foreign keys ──
+  reporterId String
+  categoryId String
+
+  // ── Relations ──
+  reporter      User                 @relation(fields: [reporterId], references: [id], onDelete: Cascade)
+  category      IssueCategory        @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  evidence      IssueEvidence[]
+  statusHistory IssueStatusHistory[]
+  assignments   IssueAssignment[]
+  comments      Comment[]
+  notifications Notification[]
+  sla           IssueSLA?
+  feedback      IssueFeedback?
+
+  @@index([reporterId])
+  @@index([categoryId])
+  @@index([status])
+  @@index([priority])
+  @@index([locality])
+  @@index([city])
+  @@index([createdAt])
+}
+
+// ============================================================
+// D. ISSUE EVIDENCE / IMAGES
+// ============================================================
+
+model IssueEvidence {
+  id        String   @id @default(uuid())
+  fileUrl   String
+  fileType  String
+  fileSize  Int?
+  createdAt DateTime @default(now())
+
+  // ── Foreign keys ──
+  issueId    String
+  uploadedBy String
+
+  // ── Relations ──
+  issue    Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  uploader User  @relation(fields: [uploadedBy], references: [id], onDelete: Cascade)
+
+  @@index([issueId])
+}
+
+// ============================================================
+// E. ISSUE STATUS HISTORY (audit trail)
+// ============================================================
+
+model IssueStatusHistory {
+  id        String      @id @default(uuid())
+  oldStatus IssueStatus
+  newStatus IssueStatus
+  remarks   String?
+  changedAt DateTime    @default(now())
+
+  // ── Foreign keys ──
+  issueId   String
+  changedBy String
+
+  // ── Relations ──
+  issue   Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  changer User  @relation(fields: [changedBy], references: [id], onDelete: Cascade)
+
+  @@index([issueId])
+  @@index([changedAt])
+}
+
+// ============================================================
+// F. DEPARTMENT MANAGEMENT
+// ============================================================
+
+model Department {
+  id          String   @id @default(uuid())
+  name        String
+  code        String   @unique
+  description String?
+  phone       String?
+  email       String?
+  locality    String?
+  city        String?
+  state       String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // ── Relations ──
+  assignments IssueAssignment[]
+
+  @@index([code])
+}
+
+// ============================================================
+// G. ISSUE ASSIGNMENT
+// ============================================================
+
+model IssueAssignment {
+  id          String    @id @default(uuid())
+  remarks     String?
+  assignedAt  DateTime  @default(now())
+  acceptedAt  DateTime?
+  completedAt DateTime?
+
+  // ── Foreign keys ──
+  issueId      String
+  departmentId String
+  assignedTo   String
+  assignedBy   String
+
+  // ── Relations ──
+  issue      Issue      @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  department Department @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  assignee   User       @relation("AssignedTo", fields: [assignedTo], references: [id], onDelete: Cascade)
+  assigner   User       @relation("AssignedBy", fields: [assignedBy], references: [id], onDelete: Cascade)
+
+  @@index([issueId])
+  @@index([departmentId])
+  @@index([assignedTo])
+}
+
+// ============================================================
+// H. COMMENTS / COMMUNITY INTERACTION
+// ============================================================
+
+model Comment {
+  id        String   @id @default(uuid())
+  comment   String
+  isEdited  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // ── Foreign keys ──
+  issueId  String
+  userId   String
+  parentId String?
+
+  // ── Relations ──
+  issue   Issue     @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  user    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent  Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: SetNull)
+  replies Comment[] @relation("CommentReplies")
+
+  @@index([issueId])
+  @@index([userId])
+}
+
+// ============================================================
+// I. NOTIFICATIONS
+// ============================================================
+
+model Notification {
+  id        String           @id @default(uuid())
+  type      NotificationType
+  title     String
+  message   String
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+  readAt    DateTime?
+
+  // ── Foreign keys ──
+  userId  String
+  issueId String?
+
+  // ── Relations ──
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  issue Issue? @relation(fields: [issueId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([isRead])
+  @@index([createdAt])
+}
+
+// ============================================================
+// J. SLA MANAGEMENT
+// ============================================================
+
+model IssueSLA {
+  id          String        @id @default(uuid())
+  priority    IssuePriority
+  targetHours Int
+  dueAt       DateTime
+  breachedAt  DateTime?
+  isBreached  Boolean       @default(false)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  // ── Foreign keys (1:1 with Issue) ──
+  issueId String @unique
+
+  // ── Relations ──
+  issue Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+}
+
+// ============================================================
+// K. CITIZEN FEEDBACK
+// ============================================================
+
+model IssueFeedback {
+  id        String   @id @default(uuid())
+  rating    Int // 1-5
+  comment   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // ── Foreign keys (1:1 with Issue) ──
+  issueId String @unique
+  userId  String
+
+  // ── Relations ──
+  issue Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// ============================================================
+// L. COMMUNITY MODULE
+// ============================================================
+
+model CommunityPost {
+  id          String   @id @default(uuid())
+  title       String
+  content     String
+  imageUrl    String?
+  locality    String?
+  city        String?
+  isPublished Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // ── Foreign keys ──
+  userId String
+
+  // ── Relations ──
+  user     User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  comments CommunityPostComment[]
+
+  @@index([userId])
+  @@index([locality])
+  @@index([createdAt])
+}
+
+model CommunityPostComment {
+  id        String   @id @default(uuid())
+  comment   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // ── Foreign keys ──
+  postId String
+  userId String
+
+  // ── Relations ──
+  post CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([postId])
+}
+
+// ============================================================
+// M. E-VOTING MODULE (future-ready)
+// ============================================================
+
+model Election {
+  id           String         @id @default(uuid())
+  title        String
+  description  String?
+  electionType String
+  startDate    DateTime
+  endDate      DateTime
+  status       ElectionStatus @default(UPCOMING)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  // ── Foreign keys ──
+  createdBy String
+
+  // ── Relations ──
+  creator User             @relation(fields: [createdBy], references: [id], onDelete: Cascade)
+  options ElectionOption[]
+  votes   Vote[]
+  results VoteResult[]
+
+  @@index([status])
+  @@index([startDate])
+  @@index([endDate])
+}
+
+model ElectionOption {
+  id            String   @id @default(uuid())
+  title         String
+  description   String?
+  candidateName String?
+  symbol        String?
+  createdAt     DateTime @default(now())
+
+  // ── Foreign keys ──
+  electionId String
+
+  // ── Relations ──
+  election Election     @relation(fields: [electionId], references: [id], onDelete: Cascade)
+  votes    Vote[]
+  results  VoteResult[]
+
+  @@index([electionId])
+}
+
+// SECURITY: No User FK — voter identity is separated from ballot
+model Vote {
+  id                 String   @id @default(uuid())
+  voterReferenceHash String
+  castAt             DateTime @default(now())
+  blockchainTxHash   String?
+
+  // ── Foreign keys ──
+  electionId String
+  optionId   String
+
+  // ── Relations ──
+  election Election       @relation(fields: [electionId], references: [id], onDelete: Cascade)
+  option   ElectionOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+
+  @@index([electionId])
+  @@index([voterReferenceHash])
+}
+
+model VoteResult {
+  id           String   @id @default(uuid())
+  totalVotes   Int      @default(0)
+  calculatedAt DateTime @default(now())
+
+  // ── Foreign keys ──
+  electionId String
+  optionId   String
+
+  // ── Relations ──
+  election Election       @relation(fields: [electionId], references: [id], onDelete: Cascade)
+  option   ElectionOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+
+  @@unique([electionId, optionId])
+  @@index([electionId])
+}
+
+// ============================================================
+// N. BLOCKCHAIN SUPPORT (future-ready)
+// ============================================================
+
+model BlockchainIdentity {
+  id                 String             @id @default(uuid())
+  walletAddress      String             @unique
+  identityProofHash  String?
+  verificationStatus VerificationStatus @default(PENDING)
+  verifiedAt         DateTime?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  // ── Foreign keys (1:1 with User) ──
+  userId String @unique
+
+  // ── Relations ──
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model BlockchainAudit {
+  id              String   @id @default(uuid())
+  entityType      String // e.g. "Issue", "Vote", "StatusChange"
+  entityId        String // UUID of the related entity
+  action          String // e.g. "CREATED", "STATUS_CHANGED", "VOTE_CAST"
+  dataHash        String?
+  transactionHash String?
+  blockNumber     Int?
+  createdAt       DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([transactionHash])
+}

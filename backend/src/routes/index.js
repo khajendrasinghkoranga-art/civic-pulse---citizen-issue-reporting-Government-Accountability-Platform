@@ -1,0 +1,33 @@
+const express = require("express");
+const authRoutes = require("../modules/auth/auth.routes");
+const userRoutes = require("../modules/users/user.routes");
+const citizenRoutes = require("../modules/citizens/citizen.routes");
+const issueRoutes = require("../modules/issues/issue.routes");
+const departmentRoutes = require("../modules/departments/department.routes");
+const assignmentRoutes = require("../modules/assignments/assignment.routes");
+const communityRoutes = require("../modules/community/community.routes");
+const pollRoutes = require("../modules/polls/poll.routes");
+const notificationRoutes = require("../modules/notifications/notification.routes");
+const analyticsRoutes = require("../modules/analytics/analytics.routes");
+const blockchainRoutes = require("../modules/blockchain/blockchain.routes");
+const uploadRoutes = require("../modules/uploads/upload.routes");
+const feedbackRoutes = require("../modules/feedback/feedback.routes");
+const adminRoutes = require("../modules/admin/admin.routes");
+
+const router = express.Router();
+router.use("/auth", authRoutes);
+router.use("/users", userRoutes);
+router.use("/citizens", citizenRoutes);
+router.use("/issues", issueRoutes);
+router.use("/departments", departmentRoutes);
+router.use("/assignments", assignmentRoutes);
+router.use("/community", communityRoutes);
+router.use("/polls", pollRoutes);
+router.use("/notifications", notificationRoutes);
+router.use("/analytics", analyticsRoutes);
+router.use("/blockchain", blockchainRoutes);
+router.use("/uploads", uploadRoutes);
+router.use("/feedback", feedbackRoutes);
+router.use("/admin", adminRoutes);
+
+module.exports = router;
