@@ -45,21 +45,27 @@ export default function SectorIssueMap({
 }: SectorIssueMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
+  const zonesLayerRef = useRef<any>(null);
+  const markersLayerRef = useRef<any>(null);
+  const LRef = useRef<any>(null);
 
+  // 1. Initialize Leaflet Map instance ONCE
   useEffect(() => {
     let isMounted = true;
 
     async function initMap() {
       if (typeof window === "undefined" || !mapContainerRef.current) return;
+      if (mapInstanceRef.current) return;
 
       const L = (await import("leaflet")).default;
+      if (!isMounted || !mapContainerRef.current) return;
+      LRef.current = L;
 
-      if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove();
-        mapInstanceRef.current = null;
+      // Clean container if already initialized
+      if ((mapContainerRef.current as any)._leaflet_id) {
+        (mapContainerRef.current as any)._leaflet_id = null;
       }
 
-      // Find user's sector center or default to Dehradun center
       let mapCenter: [number, number] = [30.3165, 78.0322];
       let mapZoom = 13;
 
@@ -75,7 +81,7 @@ export default function SectorIssueMap({
         }
       }
 
-      const map = L.map(mapContainerRef.current!, {
+      const map = L.map(mapContainerRef.current, {
         center: mapCenter,
         zoom: mapZoom,
         zoomControl: true,
@@ -87,98 +93,15 @@ export default function SectorIssueMap({
         maxZoom: 19,
       }).addTo(map);
 
-      // Draw sector boundary circles
-      SECTOR_ZONES.forEach((sec) => {
-        const isMySector = hasJurisdiction(sec.name);
-        const circle = L.circle([sec.lat, sec.lng], {
-          radius: sec.radius,
-          color: isMySector ? sec.color : "#94a3b8",
-          fillColor: isMySector ? sec.color : "#94a3b8",
-          fillOpacity: isMySector ? 0.1 : 0.04,
-          weight: isMySector ? 2.5 : 1,
-          dashArray: isMySector ? undefined : "6, 8",
-        }).addTo(map);
-
-        circle.bindTooltip(
-          `<b>🏛️ ${sec.name}</b><br/><span style="font-size:10px; color:#475569;">${
-            isMySector ? "Your Jurisdiction Zone" : "Other Sector"
-          }</span>`,
-          { permanent: false, direction: "center" }
-        );
-      });
-
-      // Filter issues with valid coordinates
-      const geoIssues = issues.filter(
-        (i) => i.latitude && i.longitude && i.latitude !== 0 && i.longitude !== 0
-      );
-
-      // Plot issue markers
-      geoIssues.forEach((issue) => {
-        const lat = issue.latitude!;
-        const lng = issue.longitude!;
-        const statusColor = STATUS_COLORS[issue.status] || "#64748b";
-        const radius = PRIORITY_SIZES[issue.priority] || 8;
-        const isInMySector = hasJurisdiction(issue.sector);
-
-        const marker = L.circleMarker([lat, lng], {
-          radius: radius,
-          fillColor: statusColor,
-          color: isInMySector ? "#ffffff" : "#e2e8f0",
-          weight: isInMySector ? 2.5 : 1.5,
-          opacity: 1,
-          fillOpacity: isInMySector ? 0.9 : 0.5,
-        }).addTo(map);
-
-        // Tooltip with issue details
-        const priorityLabel =
-          issue.priority === "URGENT"
-            ? "🔴 URGENT"
-            : issue.priority === "HIGH"
-            ? "🟠 HIGH"
-            : issue.priority === "MEDIUM"
-            ? "🟡 MEDIUM"
-            : "🟢 LOW";
-
-        const statusLabel = issue.status.replace("_", " ");
-
-        marker.bindPopup(
-          `<div style="min-width: 220px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
-            <div style="font-weight: 700; font-size: 13px; color: #0f172a; margin-bottom: 6px; line-height: 1.3;">
-              ${issue.title}
-            </div>
-            <div style="display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: #475569;">
-              <div>📍 <strong>Sector:</strong> ${issue.sector || "Unassigned"}</div>
-              <div>📋 <strong>Category:</strong> ${issue.category?.name || "General"}</div>
-              <div>⚡ <strong>Priority:</strong> ${priorityLabel}</div>
-              <div style="display: inline-flex; align-items: center; gap: 4px;">
-                <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${statusColor};"></span>
-                <strong>Status:</strong> ${statusLabel}
-              </div>
-              <div>🏠 <strong>Address:</strong> ${issue.address || issue.locality || "Dehradun"}</div>
-              ${isInMySector
-                ? `<div style="margin-top: 4px; padding: 3px 6px; background: #f0fdf4; color: #15803d; border-radius: 4px; font-weight: 600; font-size: 10px; text-align: center;">✅ In Your Jurisdiction</div>`
-                : `<div style="margin-top: 4px; padding: 3px 6px; background: #f8fafc; color: #94a3b8; border-radius: 4px; font-weight: 600; font-size: 10px; text-align: center;">🔒 Other Sector</div>`
-              }
-            </div>
-          </div>`,
-          { maxWidth: 280 }
-        );
-
-        marker.bindTooltip(issue.title, {
-          permanent: false,
-          direction: "top",
-          offset: [0, -radius],
-        });
-      });
-
+      zonesLayerRef.current = L.layerGroup().addTo(map);
+      markersLayerRef.current = L.layerGroup().addTo(map);
       mapInstanceRef.current = map;
 
-      // Fix Leaflet sizing on next tick
       setTimeout(() => {
         if (isMounted && mapInstanceRef.current) {
           mapInstanceRef.current.invalidateSize();
         }
-      }, 200);
+      }, 250);
     }
 
     initMap();
@@ -186,11 +109,133 @@ export default function SectorIssueMap({
     return () => {
       isMounted = false;
       if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove();
+        try {
+          mapInstanceRef.current.remove();
+        } catch {}
         mapInstanceRef.current = null;
       }
+      if (mapContainerRef.current) {
+        (mapContainerRef.current as any)._leaflet_id = null;
+      }
     };
-  }, [issues, userSector]);
+  }, []); // Only once on mount
+
+  // 2. Update Sector Zones when userSector or hasJurisdiction changes
+  useEffect(() => {
+    if (!mapInstanceRef.current || !zonesLayerRef.current || !LRef.current) return;
+    const L = LRef.current;
+    const zonesLayer = zonesLayerRef.current;
+    zonesLayer.clearLayers();
+
+    SECTOR_ZONES.forEach((sec) => {
+      const isMySector = hasJurisdiction(sec.name);
+      const circle = L.circle([sec.lat, sec.lng], {
+        radius: sec.radius,
+        color: isMySector ? sec.color : "#94a3b8",
+        fillColor: isMySector ? sec.color : "#94a3b8",
+        fillOpacity: isMySector ? 0.1 : 0.04,
+        weight: isMySector ? 2.5 : 1,
+        dashArray: isMySector ? undefined : "6, 8",
+      });
+
+      circle.bindTooltip(
+        `<b>🏛️ ${sec.name}</b><br/><span style="font-size:10px; color:#475569;">${
+          isMySector ? "Your Jurisdiction Zone" : "Other Sector"
+        }</span>`,
+        { permanent: false, direction: "center" }
+      );
+
+      zonesLayer.addLayer(circle);
+    });
+
+    if (userSector) {
+      const sectorMatch = userSector.match(/sector[-\s]*(\d+)/i);
+      if (sectorMatch) {
+        const sectorNum = parseInt(sectorMatch[1]);
+        const zone = SECTOR_ZONES[sectorNum - 1];
+        if (zone && mapInstanceRef.current) {
+          mapInstanceRef.current.setView([zone.lat, zone.lng], 14, { animate: true });
+        }
+      }
+    }
+  }, [userSector, hasJurisdiction]);
+
+  // 3. Update Markers when issues change
+  useEffect(() => {
+    if (!mapInstanceRef.current || !markersLayerRef.current || !LRef.current) return;
+    const L = LRef.current;
+    const markersLayer = markersLayerRef.current;
+    markersLayer.clearLayers();
+
+    const geoIssues = issues.filter(
+      (i) => i.latitude && i.longitude && i.latitude !== 0 && i.longitude !== 0
+    );
+
+    geoIssues.forEach((issue) => {
+      const lat = issue.latitude!;
+      const lng = issue.longitude!;
+      const statusColor = STATUS_COLORS[issue.status] || "#64748b";
+      const radius = PRIORITY_SIZES[issue.priority] || 8;
+      const isInMySector = hasJurisdiction(issue.sector);
+
+      const marker = L.circleMarker([lat, lng], {
+        radius: radius,
+        fillColor: statusColor,
+        color: isInMySector ? "#ffffff" : "#e2e8f0",
+        weight: isInMySector ? 2.5 : 1.5,
+        opacity: 1,
+        fillOpacity: isInMySector ? 0.9 : 0.5,
+      });
+
+      const priorityLabel =
+        issue.priority === "URGENT"
+          ? "🔴 URGENT"
+          : issue.priority === "HIGH"
+          ? "🟠 HIGH"
+          : issue.priority === "MEDIUM"
+          ? "🟡 MEDIUM"
+          : "🟢 LOW";
+
+      const statusLabel = issue.status.replace("_", " ");
+
+      marker.bindPopup(
+        `<div style="min-width: 220px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+          <div style="font-weight: 700; font-size: 13px; color: #0f172a; margin-bottom: 6px; line-height: 1.3;">
+            ${issue.title}
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: #475569;">
+            <div>📍 <strong>Sector:</strong> ${issue.sector || "Unassigned"}</div>
+            <div>📋 <strong>Category:</strong> ${issue.category?.name || "General"}</div>
+            <div>⚡ <strong>Priority:</strong> ${priorityLabel}</div>
+            <div style="display: inline-flex; align-items: center; gap: 4px;">
+              <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${statusColor};"></span>
+              <strong>Status:</strong> ${statusLabel}
+            </div>
+            <div>🏠 <strong>Address:</strong> ${issue.address || issue.locality || "Dehradun"}</div>
+            ${isInMySector
+              ? `<div style="margin-top: 4px; padding: 3px 6px; background: #f0fdf4; color: #15803d; border-radius: 4px; font-weight: 600; font-size: 10px; text-align: center;">✅ In Your Jurisdiction</div>`
+              : `<div style="margin-top: 4px; padding: 3px 6px; background: #f8fafc; color: #94a3b8; border-radius: 4px; font-weight: 600; font-size: 10px; text-align: center;">🔒 Other Sector</div>`
+            }
+          </div>
+        </div>`,
+        { maxWidth: 280 }
+      );
+
+      marker.bindTooltip(issue.title, {
+        permanent: false,
+        direction: "top",
+        offset: [0, -radius],
+      });
+
+      markersLayer.addLayer(marker);
+    });
+
+    setTimeout(() => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.invalidateSize();
+      }
+    }, 150);
+  }, [issues, hasJurisdiction]);
 
   // Count issues with geo data
   const geoCount = issues.filter(

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -33,11 +33,16 @@ import {
   BarChart2,
 } from "lucide-react";
 
-export default function DashboardPage() {
+function DashboardContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, isAuthenticated, loading: authLoading, hasJurisdiction } = useAdminAuth();
   const { lang, t } = useAdminLanguage();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const [issues, setIssues] = useState<CivicIssue[]>([]);
   const [sectorWorkload, setSectorWorkload] = useState<any[]>([]);
@@ -405,5 +410,22 @@ export default function DashboardPage() {
         </div>
       </main>
     </div>
+  );
+}
+
+export default function DashboardPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="admin-shell">
+          <AdminSidebar />
+          <main className="admin-main" style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "60vh" }}>
+            <div style={{ color: "#64748b" }}>Loading Sector Operations Control Center...</div>
+          </main>
+        </div>
+      }
+    >
+      <DashboardContent />
+    </Suspense>
   );
 }
