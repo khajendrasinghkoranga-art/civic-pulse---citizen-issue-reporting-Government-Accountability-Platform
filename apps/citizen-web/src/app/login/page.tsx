@@ -200,14 +200,17 @@ export default function LoginPage() {
               <button
                 type="button"
                 className={`gov-role-tab ${role === 'official' ? 'active' : ''}`}
-                onClick={() => setRole('official')}
+                onClick={() => {
+                  window.location.href = 'http://localhost:3001/login';
+                }}
+                title="Redirect to Government Official & Magistrate Portal"
               >
                 <span className="role-icon" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
                   <Landmark size={18} />
                 </span>
                 <div>
                   <div className="role-title">Government Official</div>
-                  <div className="role-sub">(Staff / Admin)</div>
+                  <div className="role-sub">(Admin Portal ↗)</div>
                 </div>
               </button>
 
@@ -355,7 +358,13 @@ export default function LoginPage() {
               </div>
               <div>• <strong>Your Google Account:</strong> khajendrasinghkoranga@gmail.com / CivicPulse@123</div>
               <div>• <strong>Citizen Demo:</strong> ananya@example.com / CivicPulse@123</div>
-              <div>• <strong>Admin Demo:</strong> admin@civicpulse.in / CivicPulse@123</div>
+              <div>
+                • <strong>Admin Demo:</strong> admin@civicpulse.in / CivicPulse@123 (
+                <a href="http://localhost:3001/login" style={{ color: '#2563eb', fontWeight: 600 }}>
+                  Portal: http://localhost:3001/login ↗
+                </a>
+                )
+              </div>
             </div>
 
             {/* Divider */}

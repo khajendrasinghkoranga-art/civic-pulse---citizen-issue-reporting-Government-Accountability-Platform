@@ -273,6 +273,14 @@ export default function AdminLoginPage() {
                 </div>
               </div>
             </div>
+
+            {/* Reciprocal link back to Citizen Portal */}
+            <div style={{ marginTop: "1.25rem", textAlign: "center", fontSize: "0.8rem", color: "#64748b" }}>
+              Are you a citizen?{" "}
+              <a href="http://localhost:3000/login" style={{ color: "#2563eb", fontWeight: 700, textDecoration: "underline" }}>
+                Citizen Portal (http://localhost:3000/login) ↗
+              </a>
+            </div>
           </div>
         </div>
       </div>
