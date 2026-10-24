@@ -1,9 +1,27 @@
 const express = require("express");
 const controller = require("./upload.controller");
-const { verifyToken } = require("../../middleware/auth.middleware");
+const {
+  verifyToken,
+  requirePermission,
+  requireOwnership,
+  PERMISSIONS,
+} = require("../../middleware/auth.middleware");
 const router = express.Router();
 
 router.use(verifyToken);
-router.post("/issues/:issueId/evidence", controller.uploadIssueEvidence);
+
+// Upload evidence for an issue (owner of the issue or admin)
+// POST /api/v1/uploads/issues/:issueId/evidence
+router.post(
+  "/issues/:issueId/evidence",
+  requirePermission(PERMISSIONS.EVIDENCE_UPLOAD),
+  requireOwnership({
+    model: "issue",
+    idParam: "issueId",
+    ownerField: "reporterId",
+    adminRoles: ["SUPER_ADMIN", "DEPARTMENT_ADMIN"],
+  }),
+  controller.uploadIssueEvidence
+);
 
 module.exports = router;

@@ -1,8 +1,10 @@
 const pollRepository = require("./poll.repository");
 const crypto = require("crypto");
 
-// Secret key for voter hashing - in production this should be in .env
-const VOTER_SECRET = process.env.VOTER_SECRET || "civicpulse_secret_voting_key_2024";
+const VOTER_SECRET = process.env.VOTER_SECRET || (process.env.NODE_ENV === "test" ? "test-only-voter-secret" : undefined);
+if (!VOTER_SECRET && process.env.NODE_ENV !== "test") {
+  throw new Error("VOTER_SECRET must be configured before loading the polls module");
+}
 
 const createElection = async (data) => {
   if (!data.title || !data.electionType || !data.startDate || !data.endDate) {
@@ -68,18 +70,14 @@ const castVote = async (electionId, optionId, userId, userVerified) => {
     .update(`${userId}:${electionId}`)
     .digest("hex");
 
-  // 5. Check if user already voted
-  const alreadyVoted = await pollRepository.hasVoted(electionId, voterReferenceHash);
-  if (alreadyVoted) {
-    throw new Error("You have already cast a vote in this election");
+  // The database unique constraint is the final guard against duplicate votes,
+  // including requests that arrive concurrently.
+  try {
+    return await pollRepository.castVote({ electionId, optionId, voterReferenceHash });
+  } catch (error) {
+    if (error.code === "P2002") throw new Error("You have already cast a vote in this election");
+    throw error;
   }
-
-  // 6. Cast vote
-  return await pollRepository.castVote({
-    electionId,
-    optionId,
-    voterReferenceHash,
-  });
 };
 
 const getElectionResults = async (electionId) => {

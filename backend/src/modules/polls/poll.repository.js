@@ -65,13 +65,6 @@ const updateElectionStatus = async (id, status) => {
   });
 };
 
-const hasVoted = async (electionId, voterReferenceHash) => {
-  const vote = await prisma.vote.findFirst({
-    where: { electionId, voterReferenceHash },
-  });
-  return !!vote;
-};
-
 const castVote = async ({ electionId, optionId, voterReferenceHash }) => {
   return await prisma.$transaction(async (tx) => {
     // 1. Record the vote
@@ -123,7 +116,6 @@ module.exports = {
   getElections,
   getElectionById,
   updateElectionStatus,
-  hasVoted,
   castVote,
   getElectionResults,
 };

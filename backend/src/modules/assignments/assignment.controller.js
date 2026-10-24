@@ -99,7 +99,7 @@ const getMyAssignments = async (req, res) => {
  */
 const getAssignmentById = async (req, res) => {
   try {
-    const assignment = await assignmentService.getAssignmentById(req.params.id);
+    const assignment = await assignmentService.getAssignmentById(req.params.id, req.user);
 
     res.json({ success: true, data: assignment });
   } catch (error) {
@@ -107,6 +107,9 @@ const getAssignmentById = async (req, res) => {
 
     if (error.message === "Assignment not found") {
       return res.status(404).json({ success: false, message: error.message });
+    }
+    if (error.message === "You do not have permission to view this assignment") {
+      return res.status(403).json({ success: false, message: error.message });
     }
 
     res.status(500).json({ success: false, message: "Failed to fetch assignment" });

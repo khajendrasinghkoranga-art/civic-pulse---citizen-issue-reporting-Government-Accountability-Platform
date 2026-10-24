@@ -10,7 +10,6 @@ const safeUserSelect = {
   isVerified: true,
   isActive: true,
   identityVerified: true,
-  blockchainAddress: true,
   createdAt: true,
   updatedAt: true,
 };

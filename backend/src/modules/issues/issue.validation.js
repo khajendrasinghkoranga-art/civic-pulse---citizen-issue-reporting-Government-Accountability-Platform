@@ -37,6 +37,11 @@ const createIssueSchema = z.object({
         .max(500, "Address must not exceed 500 characters")
         .optional(),
 
+    sector: z
+        .string()
+        .max(150, "Sector must not exceed 150 characters")
+        .optional(),
+
     ward: z
         .string()
         .max(100, "Ward must not exceed 100 characters")
@@ -71,7 +76,13 @@ const updateIssueStatusSchema = z.object({
     status: z.enum(["SUBMITTED", "UNDER_REVIEW", "IN_PROGRESS", "RESOLVED", "REJECTED"]),
     remarks: z
         .string()
-        .max(1000, "Remarks must not exceed 1000 characters")
+        .max(2000, "Remarks must not exceed 2000 characters")
+        .optional(),
+    resolutionProofUrl: z
+        .string()
+        .optional(),
+    broadcastToTransparency: z
+        .boolean()
         .optional(),
 });
 

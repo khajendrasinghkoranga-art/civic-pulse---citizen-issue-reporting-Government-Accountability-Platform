@@ -50,9 +50,12 @@ const getMyAssignments = async (userId, pagination) => {
 /**
  * Get assignment by ID
  */
-const getAssignmentById = async (id) => {
+const getAssignmentById = async (id, requester) => {
   const assignment = await assignmentRepository.getAssignmentById(id);
   if (!assignment) throw new Error("Assignment not found");
+  if (assignment.assignedTo !== requester.id && !["SUPER_ADMIN", "DEPARTMENT_ADMIN"].includes(requester.role)) {
+    throw new Error("You do not have permission to view this assignment");
+  }
   return assignment;
 };
 

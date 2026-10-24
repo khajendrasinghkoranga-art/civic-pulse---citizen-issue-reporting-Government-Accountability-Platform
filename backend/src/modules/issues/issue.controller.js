@@ -1,5 +1,11 @@
 const issueService = require("./issue.service");
 
+const hideAnonymousReporter = (issue, viewerId) => {
+    if (!issue || !issue.isAnonymous || issue.reporterId === viewerId) return issue;
+    const { reporterId: _reporterId, ...publicIssue } = issue;
+    return { ...publicIssue, reporter: { name: "Anonymous" } };
+};
+
 /**
  * POST /api/v1/issues
  * Create a new civic issue (reporterId comes from JWT)
@@ -11,7 +17,7 @@ const createIssue = async (req, res) => {
         res.status(201).json({
             success: true,
             message: "Issue reported successfully",
-            data: issue,
+            data: hideAnonymousReporter(issue, req.user.id),
         });
     } catch (error) {
         console.error("Create issue error:", error);
@@ -36,12 +42,13 @@ const createIssue = async (req, res) => {
  */
 const getAllIssues = async (req, res) => {
     try {
-        const { status, priority, categoryId, city, locality, search, page, limit } = req.query;
+        const { status, priority, categoryId, sector, city, locality, search, page, limit } = req.query;
 
         const result = await issueService.getAllIssues({
             status,
             priority,
             categoryId,
+            sector,
             city,
             locality,
             search,
@@ -51,7 +58,7 @@ const getAllIssues = async (req, res) => {
 
         res.json({
             success: true,
-            data: result.issues,
+            data: result.issues.map((issue) => hideAnonymousReporter(issue, req.user.id)),
             pagination: result.pagination,
         });
     } catch (error) {
@@ -121,7 +128,7 @@ const getIssueById = async (req, res) => {
 
         res.json({
             success: true,
-            data: issue,
+            data: hideAnonymousReporter(issue, req.user.id),
         });
     } catch (error) {
         console.error("Get issue error:", error);
@@ -175,13 +182,14 @@ const getIssueHistory = async (req, res) => {
  */
 const updateIssueStatus = async (req, res) => {
     try {
-        const { status, remarks } = req.body;
+        const { status, remarks, resolutionProofUrl, broadcastToTransparency } = req.body;
 
         const issue = await issueService.updateIssueStatus(
             req.params.id,
             status,
-            req.user.id,
-            remarks
+            req.user,
+            remarks,
+            { resolutionProofUrl, broadcastToTransparency }
         );
 
         res.json({
@@ -199,9 +207,56 @@ const updateIssueStatus = async (req, res) => {
             });
         }
 
+        if (error.message.includes("Jurisdiction Access Denied")) {
+            return res.status(403).json({
+                success: false,
+                message: error.message,
+            });
+        }
+
         res.status(500).json({
             success: false,
-            message: "Failed to update issue status",
+            message: error.message || "Failed to update issue status",
+        });
+    }
+};
+
+/**
+ * GET /api/v1/issues/sectors/workload
+ * Get real-time workload & load balancing data for all Dehradun sectors
+ */
+const getSectorWorkload = async (req, res) => {
+    try {
+        const workload = await issueService.getSectorWorkload();
+        res.json({
+            success: true,
+            data: workload,
+        });
+    } catch (error) {
+        console.error("Get sector workload error:", error);
+        res.status(500).json({
+            success: false,
+            message: "Failed to fetch sector workload analytics",
+        });
+    }
+};
+
+/**
+ * GET /api/v1/issues/sectors
+ * Get list of all configured Dehradun municipal sectors
+ */
+const getSectors = async (req, res) => {
+    try {
+        const sectors = await issueService.getAllSectors();
+        res.json({
+            success: true,
+            data: sectors,
+        });
+    } catch (error) {
+        console.error("Get sectors error:", error);
+        res.status(500).json({
+            success: false,
+            message: "Failed to fetch sectors",
         });
     }
 };
@@ -214,4 +269,6 @@ module.exports = {
     getIssueById,
     getIssueHistory,
     updateIssueStatus,
+    getSectorWorkload,
+    getSectors,
 };

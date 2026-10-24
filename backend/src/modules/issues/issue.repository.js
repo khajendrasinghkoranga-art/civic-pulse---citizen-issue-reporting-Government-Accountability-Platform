@@ -75,18 +75,26 @@ const createIssue = async (data, category) => {
 /**
  * Get all reported issues with filters and pagination
  */
-const getAllIssues = async ({ status, priority, categoryId, city, locality, search, page = 1, limit = 20 }) => {
+const getAllIssues = async ({ status, priority, categoryId, sector, city, locality, search, page = 1, limit = 20 }) => {
     const where = {};
 
     if (status) where.status = status;
     if (priority) where.priority = priority;
     if (categoryId) where.categoryId = categoryId;
+    if (sector && sector.toUpperCase() !== "ALL") {
+        const sectorNormalized = sector.replace(/-/g, " ");
+        where.sector = {
+            contains: sectorNormalized.length < sector.length ? sectorNormalized : sector,
+            mode: "insensitive",
+        };
+    }
     if (city) where.city = { contains: city, mode: "insensitive" };
     if (locality) where.locality = { contains: locality, mode: "insensitive" };
     if (search) {
         where.OR = [
             { title: { contains: search, mode: "insensitive" } },
             { description: { contains: search, mode: "insensitive" } },
+            { sector: { contains: search, mode: "insensitive" } },
         ];
     }
 
@@ -196,7 +204,6 @@ const getIssueById = async (id) => {
                 },
             },
             sla: true,
-            feedback: true,
         },
     });
 };
@@ -219,27 +226,36 @@ const getIssueHistory = async (issueId) => {
 /**
  * Update issue status and create status history entry (transaction)
  */
-const updateIssueStatus = async (issueId, newStatus, changedBy, remarks) => {
-    // Get current issue status
+const updateIssueStatus = async (issueId, newStatus, changedBy, remarks, resolutionData = {}) => {
+    // Get current issue details
     const currentIssue = await prisma.issue.findUnique({
         where: { id: issueId },
-        select: { status: true },
+        select: { id: true, status: true, title: true, sector: true, address: true, locality: true, city: true },
     });
 
     if (!currentIssue) return null;
 
-    // Use transaction to update status + create history atomically
-    const [updatedIssue, _statusHistory] = await prisma.$transaction([
+    const { resolutionProofUrl, broadcastToTransparency, changerUser } = resolutionData;
+
+    const updateData = {
+        status: newStatus,
+        ...(newStatus === "RESOLVED" && {
+            resolvedAt: new Date(),
+            resolutionProofUrl: resolutionProofUrl || null,
+            resolutionRemarks: remarks || null,
+            resolvedByUserId: changedBy,
+        }),
+    };
+
+    const operations = [
         prisma.issue.update({
             where: { id: issueId },
-            data: {
-                status: newStatus,
-                ...(newStatus === "RESOLVED" && { resolvedAt: new Date() }),
-            },
+            data: updateData,
             include: {
                 category: {
                     select: { id: true, name: true, icon: true },
                 },
+                evidence: true,
             },
         }),
         prisma.issueStatusHistory.create({
@@ -251,7 +267,44 @@ const updateIssueStatus = async (issueId, newStatus, changedBy, remarks) => {
                 remarks,
             },
         }),
-    ]);
+    ];
+
+    if (resolutionProofUrl) {
+        operations.push(
+            prisma.issueEvidence.create({
+                data: {
+                    issueId,
+                    fileUrl: resolutionProofUrl,
+                    fileType: "image",
+                    uploadedBy: changedBy,
+                },
+            })
+        );
+    }
+
+    const [updatedIssue, _statusHistory] = await prisma.$transaction(operations);
+
+    // If resolved, broadcast official resolution post to government transparency dashboard / community
+    if (newStatus === "RESOLVED" && broadcastToTransparency !== false) {
+        try {
+            const officerName = changerUser?.name || "Zonal Magistrate";
+            const officerOrg = changerUser?.organization || changerUser?.sector || "Dehradun Municipal Corporation";
+            const officerDesig = changerUser?.designation || "Zonal Executive Magistrate";
+            await prisma.communityPost.create({
+                data: {
+                    title: `[RESOLVED • ${currentIssue.sector || "Municipal Sector"}] ${currentIssue.title}`,
+                    content: `OFFICIAL RESOLUTION REPORT\n\nStatus: RESOLVED ✓\nAction Report: ${remarks || "Ground remediation verified and inspected."}\nZonal Magistrate: ${officerName} (${officerDesig})\nOrganization: ${officerOrg}\nAssigned Sector: ${currentIssue.sector || "Dehradun Municipal Sector"}\nLocation: ${currentIssue.address || currentIssue.locality || "Dehradun"}\n\nResolution proof photo has been published to the Government Transparency Dashboard for public verification.`,
+                    imageUrl: resolutionProofUrl || null,
+                    locality: currentIssue.locality || currentIssue.sector,
+                    city: currentIssue.city || "Dehradun",
+                    isPublished: true,
+                    userId: changedBy,
+                },
+            });
+        } catch (postErr) {
+            console.error("Failed to broadcast resolution to community/transparency feed:", postErr);
+        }
+    }
 
     return updatedIssue;
 };
@@ -274,6 +327,77 @@ const getAllCategories = async () => {
     });
 };
 
+/**
+ * Get real-time workload and load-balancing statistics per municipal sector
+ */
+const getSectorWorkload = async () => {
+    const { DEHRADUN_SECTORS } = require("../../utils/sectorResolver");
+
+    const issues = await prisma.issue.findMany({
+        select: {
+            id: true,
+            title: true,
+            sector: true,
+            status: true,
+            priority: true,
+            createdAt: true,
+        },
+    });
+
+    const totalIssues = issues.length;
+    const totalActive = issues.filter((i) => i.status !== "RESOLVED" && i.status !== "REJECTED").length;
+
+    const sectors = DEHRADUN_SECTORS.map((sec) => {
+        const sectorIssues = issues.filter(
+            (i) => i.sector && (i.sector.includes(sec.name) || i.sector.includes(sec.id) || i.sector.toLowerCase().includes(sec.keywords[0]))
+        );
+        const active = sectorIssues.filter((i) => i.status !== "RESOLVED" && i.status !== "REJECTED").length;
+        const resolved = sectorIssues.filter((i) => i.status === "RESOLVED").length;
+        const urgent = sectorIssues.filter((i) => i.priority === "URGENT" && i.status !== "RESOLVED").length;
+        const capacity = sec.capacityThreshold || 25;
+        const loadRatio = capacity > 0 ? active / capacity : 0;
+
+        let loadStatus = "OPTIMAL";
+        let statusBadgeColor = "#10b981"; // green
+        if (loadRatio > 1.0) {
+            loadStatus = "SURGE / OVERLOAD";
+            statusBadgeColor = "#ef4444"; // red
+        } else if (loadRatio >= 0.7) {
+            loadStatus = "HIGH LOAD";
+            statusBadgeColor = "#f97316"; // orange
+        } else if (loadRatio >= 0.35) {
+            loadStatus = "MODERATE LOAD";
+            statusBadgeColor = "#eab308"; // yellow
+        }
+
+        return {
+            id: sec.id,
+            name: sec.name,
+            zone: sec.zone,
+            center: sec.center,
+            dispatchUnit: sec.dispatchUnit,
+            office: sec.office,
+            helpline: sec.helpline,
+            totalCount: sectorIssues.length,
+            activeCount: active,
+            resolvedCount: resolved,
+            urgentCount: urgent,
+            capacityThreshold: capacity,
+            loadRatio: parseFloat(loadRatio.toFixed(2)),
+            loadPercentage: totalActive > 0 ? Math.round((active / totalActive) * 100) : 0,
+            loadStatus,
+            statusBadgeColor,
+        };
+    });
+
+    return {
+        totalIssues,
+        totalActive,
+        sectorCount: DEHRADUN_SECTORS.length,
+        sectors,
+    };
+};
+
 module.exports = {
     createIssue,
     getAllIssues,
@@ -283,4 +407,5 @@ module.exports = {
     updateIssueStatus,
     getCategoryById,
     getAllCategories,
+    getSectorWorkload,
 };

@@ -10,9 +10,12 @@ const submitFeedback = async (issueId, userId, { rating, comment }) => {
   if (await repository.findByIssue(issueId)) throw new Error("Feedback has already been submitted for this issue");
   return repository.create({ issueId, userId, rating, comment: typeof comment === "string" ? comment.trim() || null : null });
 };
-const getFeedback = async (issueId) => {
-  const issue = await prisma.issue.findUnique({ where: { id: issueId }, select: { id: true } });
+const getFeedback = async (issueId, requester) => {
+  const issue = await prisma.issue.findUnique({ where: { id: issueId }, select: { id: true, reporterId: true } });
   if (!issue) throw new Error("Issue not found");
+  if (issue.reporterId !== requester.id && requester.role !== "SUPER_ADMIN") {
+    throw new Error("You do not have permission to view this feedback");
+  }
   return repository.findByIssue(issueId);
 };
 module.exports = { submitFeedback, getFeedback };

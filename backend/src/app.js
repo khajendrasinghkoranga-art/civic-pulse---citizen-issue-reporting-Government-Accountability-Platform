@@ -8,7 +8,13 @@ const { createRateLimit } = require("./middleware/rateLimit.middleware");
 
 const app = express();
 
-app.use(cors());
+const allowedOrigins = (process.env.CORS_ORIGINS || "").split(",").map((origin) => origin.trim()).filter(Boolean);
+app.use(cors({
+  origin(origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(null, false);
+  },
+}));
 app.use(express.json({ limit: "7mb" }));
 app.use("/uploads", express.static(uploadDirectory));
 

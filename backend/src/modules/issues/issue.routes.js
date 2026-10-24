@@ -3,13 +3,27 @@ const router = express.Router();
 const issueController = require("./issue.controller");
 const issueValidation = require("./issue.validation");
 const assignmentController = require("../assignments/assignment.controller");
-const { verifyToken, restrictTo } = require("../../middleware/auth.middleware");
+const {
+  verifyToken,
+  restrictTo,
+  requirePermission,
+  requireOwnership,
+  PERMISSIONS,
+} = require("../../middleware/auth.middleware");
 
 // ── Public routes (no auth needed) ──
 
 // Get all issue categories
 // GET /api/v1/issues/categories
 router.get("/categories", issueController.getCategories);
+
+// Get all municipal sectors for Dehradun
+// GET /api/v1/issues/sectors
+router.get("/sectors", issueController.getSectors);
+
+// Get real-time sector workload and load balancing statistics
+// GET /api/v1/issues/sectors/workload
+router.get("/sectors/workload", issueController.getSectorWorkload);
 
 // ── All routes below require authentication ──
 router.use(verifyToken);
@@ -28,7 +42,7 @@ router.get(
 // POST /api/v1/issues
 router.post(
     "/",
-    restrictTo("CITIZEN"),
+    requirePermission(PERMISSIONS.ISSUE_CREATE),
     issueValidation.validateCreateIssue,
     issueController.createIssue
 );
@@ -49,7 +63,7 @@ router.get("/:id/history", issueController.getIssueHistory);
 // PATCH /api/v1/issues/:id/status
 router.patch(
     "/:id/status",
-    restrictTo("DEPARTMENT_STAFF", "DEPARTMENT_ADMIN", "SUPER_ADMIN"),
+    requirePermission(PERMISSIONS.ISSUE_UPDATE_STATUS),
     issueValidation.validateUpdateIssueStatus,
     issueController.updateIssueStatus
 );

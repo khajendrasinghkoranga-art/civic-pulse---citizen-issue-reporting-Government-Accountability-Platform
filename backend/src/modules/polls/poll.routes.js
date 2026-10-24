@@ -1,7 +1,12 @@
 const express = require("express");
 const router = express.Router();
 const pollController = require("./poll.controller");
-const { verifyToken, restrictTo } = require("../../middleware/auth.middleware");
+const {
+  verifyToken,
+  requirePermission,
+  requireVerifiedIdentity,
+  PERMISSIONS,
+} = require("../../middleware/auth.middleware");
 
 // All routes require authentication
 router.use(verifyToken);
@@ -11,13 +16,13 @@ router.use(verifyToken);
 
 router.post(
   "/",
-  restrictTo("SUPER_ADMIN", "DEPARTMENT_ADMIN"),
+  requirePermission(PERMISSIONS.POLL_CREATE),
   pollController.createElection
 );
 
 router.patch(
   "/:id/status",
-  restrictTo("SUPER_ADMIN", "DEPARTMENT_ADMIN"),
+  requirePermission(PERMISSIONS.POLL_UPDATE_STATUS),
   pollController.updateElectionStatus
 );
 
@@ -26,6 +31,13 @@ router.patch(
 router.get("/", pollController.getElections);
 router.get("/:id", pollController.getElectionById);
 router.get("/:id/results", pollController.getElectionResults);
-router.post("/:id/vote", pollController.castVote);
+
+// Vote requires both permission and verified identity
+router.post(
+  "/:id/vote",
+  requirePermission(PERMISSIONS.POLL_VOTE),
+  requireVerifiedIdentity,
+  pollController.castVote
+);
 
 module.exports = router;
