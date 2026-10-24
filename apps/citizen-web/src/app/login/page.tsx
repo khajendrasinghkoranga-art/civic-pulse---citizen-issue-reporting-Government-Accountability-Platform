@@ -23,6 +23,7 @@ import {
   ArrowRight,
   KeyRound,
   Smartphone,
+  Sparkles,
 } from 'lucide-react';
 
 import GoogleAuthModal, { GoogleIcon } from '@/components/auth/GoogleAuthModal';
