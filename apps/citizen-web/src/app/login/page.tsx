@@ -23,7 +23,6 @@ import {
   ArrowRight,
   KeyRound,
   Smartphone,
-  Sparkles,
 } from 'lucide-react';
 
 import GoogleAuthModal, { GoogleIcon } from '@/components/auth/GoogleAuthModal';
@@ -238,46 +237,6 @@ export default function LoginPage() {
 
             {/* Login Form */}
             <form onSubmit={handleSubmit}>
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  marginBottom: '1rem',
-                  background: '#eff6ff',
-                  border: '1px solid #bfdbfe',
-                  borderRadius: '8px',
-                  padding: '8px 12px',
-                  fontSize: '0.8rem',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#1e3a8a' }}>
-                  <Sparkles size={15} color="#2563eb" />
-                  <span>
-                    Citizen: <strong>khajendrasinghkoranga@gmail.com</strong>
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEmail('khajendrasinghkoranga@gmail.com');
-                    setPassword('CivicPulse@123');
-                  }}
-                  style={{
-                    background: '#2563eb',
-                    color: '#ffffff',
-                    border: 'none',
-                    borderRadius: '6px',
-                    padding: '4px 10px',
-                    fontSize: '0.75rem',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                  }}
-                >
-                  Quick Fill
-                </button>
-              </div>
-
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '1.25rem' }}>
                 <div className="gov-input-group">
                   <label className="gov-label">
