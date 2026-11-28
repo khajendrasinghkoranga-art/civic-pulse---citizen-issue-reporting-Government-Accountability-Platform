@@ -11,9 +11,16 @@ const app = express();
 const allowedOrigins = (process.env.CORS_ORIGINS || "").split(",").map((origin) => origin.trim()).filter(Boolean);
 app.use(cors({
   origin(origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
-    return callback(null, false);
+    if (!origin || allowedOrigins.length === 0 || allowedOrigins.includes(origin) || allowedOrigins.includes("*")) {
+      return callback(null, true);
+    }
+    // Allow any vercel preview deployment or local dev
+    if (origin.endsWith(".vercel.app") || origin.includes("localhost") || origin.includes("127.0.0.1") || origin.includes(".exp.direct")) {
+      return callback(null, true);
+    }
+    return callback(null, true); // Permissive for mobile & cross-origin apps
   },
+  credentials: true,
 }));
 app.use(express.json({ limit: "7mb" }));
 app.use("/uploads", express.static(uploadDirectory));

@@ -12,6 +12,7 @@ const analyticsRoutes = require("../modules/analytics/analytics.routes");
 const uploadRoutes = require("../modules/uploads/upload.routes");
 const feedbackRoutes = require("../modules/feedback/feedback.routes");
 const adminRoutes = require("../modules/admin/admin.routes");
+const chatRoutes = require("../modules/chat/chat.routes");
 
 const router = express.Router();
 router.use("/auth", authRoutes);
@@ -27,5 +28,6 @@ router.use("/analytics", analyticsRoutes);
 router.use("/uploads", uploadRoutes);
 router.use("/feedback", feedbackRoutes);
 router.use("/admin", adminRoutes);
+router.use("/chat", chatRoutes);
 
 module.exports = router;

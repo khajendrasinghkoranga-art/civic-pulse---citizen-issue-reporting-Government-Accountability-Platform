@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 import { AuthProvider } from '@/hooks/useAuth';
 import { LanguageProvider } from '@/hooks/useLanguage';
+import ChatbotWidget from '@/components/ChatbotWidget';
 
 export const metadata: Metadata = {
   title: 'CivicPulse — Citizen Issue Reporting & Government Accountability',
@@ -22,7 +23,10 @@ export default function RootLayout({
     <html lang="en">
       <body>
         <LanguageProvider>
-          <AuthProvider>{children}</AuthProvider>
+          <AuthProvider>
+            {children}
+            <ChatbotWidget />
+          </AuthProvider>
         </LanguageProvider>
       </body>
     </html>

@@ -1,0 +1,43 @@
+{
+  "expo": {
+    "name": "CivicPulse",
+    "slug": "civicpulse-citizen",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/civicpulse-logo.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "CivicPulse needs camera access to capture geotagged civic issue photos.",
+        "NSPhotoLibraryUsageDescription": "CivicPulse needs photo library access to attach issue evidence.",
+        "NSLocationWhenInUseUsageDescription": "CivicPulse uses your location to route civic issues to the right Dehradun sector."
+      }
+    },
+    "android": {
+      "package": "com.civicpulse.citizen",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "CAMERA"
+      ]
+    },
+    "plugins": [
+      "expo-secure-store",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Allow CivicPulse to use your location to route civic issues to the right sector."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow CivicPulse to access your photos to attach civic issue evidence.",
+          "cameraPermission": "Allow CivicPulse to use your camera to capture civic issue photos."
+        }
+      ]
+    ]
+  }
+}
